@@ -7,31 +7,37 @@
  *
  *   I2C
  *
- *   +-----------------+   +----------+   +-----------------+   +----------+
- *   | ESP32           |   | LSM9DS0  |   | ESP8266         |   | LSM9DS0  |
- *   |                 |   |          |   |                 |   |          |
- *   |   GPIO 14 (SCL) ----> SCL      |   |   GPIO 14 (SCL) ----> SCL      |
- *   |   GPIO 13 (SDA) <---> SDA      |   |   GPIO 13 (SDA) <---> SDA      |
- *   |   GPIO 5        <---- INT1_XM  |   |   GPIO 5        <---- INT1_XM  |
- *   |   GPIO 4        <---- INT2_XM  |   |   GPIO 4        <---- INT2_XM  |
- *   |   GPIO 22       <---- INT_G    |   |   GPIO 2        <---- INT_G    |
- *   |   GPIO 23       <---- DRDY_G   |   |   GPIO ??       <---- DRDY_G   |
- *   +-----------------+   +----------+   +-----------------+   +----------+
+ *   +-----------------+   +----------+     +-----------------+   +----------+
+ *   | ESP32           |   | LSM9DS0  |     | ESP8266         |   | LSM9DS0  |
+ *   |                 |   |          |     |                 |   |          |
+ *   |   GPIO 14 (SCL) ----> SCL      |     |   GPIO 14 (SCL) ----> SCL      |
+ *   |   GPIO 13 (SDA) <---> SDA      |     |   GPIO 13 (SDA) <---> SDA      |
+ *   |   GPIO 5        <---- INT1_XM  |     |   GPIO 5        <---- INT1_XM  |
+ *   |   GPIO 4        <---- INT2_XM  |     |   GPIO 4        <---- INT2_XM  |
+ *   |   GPIO 22       <---- INT_G    |     |   GPIO 2        <---- INT_G    |
+ *   |   GPIO 23       <---- DRDY_G   |     |   GPIO 0        <---- DRDY_G   |
+ *   +-----------------+   +----------+     +-----------------+   +----------+
  *
- *   SPI (two SPI interfaces needed -> only working on ESP32)  
+ *   SPI
  *
- *   +-----------------+   +----------+
- *   | ESP32           |   | LSM9DS0  |
- *   |                 |   |          |
- *   |   GPIO 16 (SCK) ----> SCK      |
- *   |   GPIO 17 (MOSI)----> SDI      |
- *   |   GPIO 18 (MISO)<---- SDO_XM   |
- *   |   GPIO 19 (CS)  ----> CS_XM    |
- *   |   GPIO 5        <---- INT1_XM  |
- *   |   GPIO 4        <---- INT2_XM  |
- *   |   GPIO 22       <---- INT_G    |
- *   |   GPIO 23       <---- DRDY_G   |
- *   +-----------------+    +---------+
+ *   +-----------------+   +----------+     +-----------------+   +----------+
+ *   | ESP32           |   | LSM9DS0  |     | ESP8266         |   | LSM9DS0  |
+ *   |                 |   |          |     |                 |   |          |
+ *   |   GPIO 16 (SCK) ----> SCK      |     |   GPIO 14 (SCK) ----> SCK      |
+ *   |   GPIO 17 (MOSI)----> SDI      |     |   GPIO 13 (MOSI)----> SDI      |
+ *   |   GPIO 18 (MISO)<-+-- SDO_XM/G |     |   GPIO 12 (MISO)<-+-- SDO_XM/G |
+ *   |                 | +-- SDO_G    |     |                 | +-- SDO_G    |
+ *   |   GPIO 19 (CS1) ----> CS_XM    |     |   GPIO 2  (CS1) ----> CS_XM    |
+ *   |   GPIO 21 (CS2) ----> CS_G     |     |   GPIO 0  (CS2) ----> CS_G     |
+ *   |   GPIO 5        <---- INT1_XM  |     |   GPIO 5        <---- INT1_XM  |
+ *   |   GPIO 4        <---- INT2_XM  |     |   GPIO 4        <---- INT2_XM  |
+ *   |   GPIO 22       <---- INT_G    |     |   GPIO 16 !!!   <---- INT_G    |
+ *   |   GPIO 23       <---- DRDY_G   |     |   GPIO 15 !!!   <---- DRDY_G   |
+ *   +-----------------+    +---------+     +-----------------+    +---------+
+ *
+ * Please note: Using GPIOs 15 and 16 as interrupts signals might lead to
+ * problems on ESP8266. The SPI configuration works without any problems if no
+ * interrupts are used or only GPIO 5 and 4 are used as interrupt signals.
  */
 
 /* -- use following constants to define the example mode ----------- */
@@ -60,24 +66,44 @@
 // user task stack depth for ESP32
 #define TASK_STACK_DEPTH 2048
 
+// interrupt GPIOs defintions for ESP32
+#define PIN_INT1_XM   5
+#define PIN_INT2_XM   4
+#define PIN_INT_G     22
+#define PIN_DRDY_G    23
+
 // SPI interface definitions for ESP32
 #define SPI_BUS       HSPI_HOST
 #define SPI_SCK_GPIO  16
 #define SPI_MOSI_GPIO 17
 #define SPI_MISO_GPIO 18
-#define SPI_CS_GPIO   19
+#define SPI_CS1_GPIO  19
+#define SPI_CS2_GPIO  21
 
 #else  // ESP8266 (esp-open-rtos)
 
 // user task stack depth for ESP8266
-#define TASK_STACK_DEPTH 256
+#define TASK_STACK_DEPTH 512
+
+// interrupt GPIOs defintions for ESP32
+#define PIN_INT1_XM   5
+#define PIN_INT2_XM   4
+
+#ifdef SPI_USED
+#define PIN_INT_G     16
+#define PIN_DRDY_G    15
+#else
+#define PIN_INT_G     2
+#define PIN_DRDY_G    0
+#endif
 
 // SPI interface definitions for ESP8266
 #define SPI_BUS       1
 #define SPI_SCK_GPIO  14
 #define SPI_MOSI_GPIO 13
 #define SPI_MISO_GPIO 12
-#define SPI_CS_GPIO   2   // GPIO 15, the default CS of SPI bus 1, can't be used
+#define SPI_CS1_GPIO  2   // GPIO 15, the default CS of SPI bus 1, can't be used
+#define SPI_CS2_GPIO  0   // GPIO 15, the default CS of SPI bus 1, can't be used
 
 #endif  // ESP_PLATFORM
 
@@ -86,12 +112,6 @@
 #define I2C_SCL_PIN   14
 #define I2C_SDA_PIN   13
 #define I2C_FREQ      I2C_FREQ_100K
-
-// interrupt GPIOs defintions for ESP8266 and ESP32
-#define PIN_INT1_XM   5
-#define PIN_INT2_XM   4
-#define PIN_INT_G     6
-#define PIN_DRDY_G    7
 
 /* -- user tasks --------------------------------------------------- */
 
@@ -214,13 +234,17 @@ void user_task_interrupt (void *pvParameters)
             #ifdef INT_DATA
             lsm9ds0_get_int_am_data_source (sensor_am, &am_data_src);
             lsm9ds0_get_int_g_data_source  (sensor_g , &g_data_src);
-            #elif INT_A_EVENT
+            #endif
+            #ifdef INT_A_EVENT
             lsm9ds0_get_int_a_event_source (sensor_am, &a_event_src, lsm9ds0_int_a_event1_gen);
-            #elif INT_A_CLICK
+            #endif
+            #ifdef INT_A_CLICK
             lsm9ds0_get_int_a_click_source (sensor_am, &a_click_src);
-            #elif INT_M_THRESH
+            #endif
+            #ifdef INT_M_THRESH
             lsm9ds0_get_int_m_thresh_source(sensor_am, &m_thresh_src);
-            #elif INT_G_EVENT
+            #endif
+            #ifdef INT_G_EVENT
             lsm9ds0_get_int_g_event_source (sensor_g , &g_event_src);
             #endif
 
@@ -324,7 +348,8 @@ void user_init(void)
     spi_bus_init (SPI_BUS, SPI_SCK_GPIO, SPI_MISO_GPIO, SPI_MOSI_GPIO);
 
     // init the sensor connected to SPI_BUS with SPI_CS_GPIO as chip select.
-    sensor_am = lsm9ds0_init_am_sensor (SPI_BUS, 0, SPI_CS_GPIO);
+    sensor_am = lsm9ds0_init_am_sensor (SPI_BUS, 0, SPI_CS1_GPIO);
+    sensor_g  = lsm9ds0_init_g_sensor  (SPI_BUS, 0, SPI_CS2_GPIO);
     
     #else
 
@@ -336,7 +361,7 @@ void user_init(void)
     sensor_g  = lsm9ds0_init_g_sensor  (I2C_BUS, LSM9DS0_I2C_G_ADDRESS_2 , 0);
 
     #endif
-    
+
     if (sensor_am)
     {
         // --- SYSTEM CONFIGURATION PART ----
@@ -416,7 +441,7 @@ void user_init(void)
         // a_event_config.mode = lsm9ds0_6d_position;
         // a_event_config.mode = lsm9ds0_4d_movement;
         // a_event_config.mode = lsm9ds0_4d_position;
-        a_event_config.threshold = 50;
+        a_event_config.threshold = 10;
         a_event_config.x_low_enabled  = false;
         a_event_config.x_high_enabled = true;
         a_event_config.y_low_enabled  = false;
@@ -460,9 +485,9 @@ void user_init(void)
         g_event_config.x_low_enabled  = false;
         g_event_config.y_low_enabled  = false;
         g_event_config.z_low_enabled  = false;
-        g_event_config.x_threshold = 5000;
-        g_event_config.y_threshold = 5000;
-        g_event_config.z_threshold = 5000;
+        g_event_config.x_threshold = 3000;
+        g_event_config.y_threshold = 3000;
+        g_event_config.z_threshold = 3000;
     
         g_event_config.filter = lsm9ds0_g_hpf_only;
         g_event_config.and_or = false;
