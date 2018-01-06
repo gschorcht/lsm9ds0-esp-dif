@@ -317,8 +317,6 @@ void IRAM int_signal_handler (uint8_t gpio)
 
 void user_task_periodic(void *pvParameters)
 {
-    vTaskDelay (100/portTICK_PERIOD_MS);
-    
     while (1)
     {
         // read sensor data
@@ -351,7 +349,7 @@ void user_init(void)
     sensor_am = lsm9ds0_init_am_sensor (SPI_BUS, 0, SPI_CS1_GPIO);
     sensor_g  = lsm9ds0_init_g_sensor  (SPI_BUS, 0, SPI_CS2_GPIO);
     
-    #else
+    #else // I2C
 
     // init all I2C busses at which LSM9DS0 sensors are connected
     i2c_init (I2C_BUS, I2C_SCL_PIN, I2C_SDA_PIN, I2C_FREQ);
@@ -364,17 +362,12 @@ void user_init(void)
 
     if (sensor_am)
     {
-        // --- SYSTEM CONFIGURATION PART ----
+        #ifdef INT_USED
+
+        /** --- INTERRUPT CONFIGURATION PART ---- */
         
-        #if !defined (INT_USED)
-
-        // create a user task that fetches data from sensor periodically
-        xTaskCreate(user_task_periodic, "user_task_periodic", TASK_STACK_DEPTH, NULL, 2, NULL);
-
-        #else // INT_USED
-
-        // create a task that is triggered only in case of interrupts to fetch the data
-        xTaskCreate(user_task_interrupt, "user_task_interrupt", TASK_STACK_DEPTH, NULL, 2, NULL);
+        // Interrupt configuration has to be done before the sensor is set
+        // into measurement mode to avoid losing interrupts
 
         // create an event queue to send interrupt events from interrupt
         // handler to the interrupt task
@@ -390,13 +383,10 @@ void user_init(void)
         gpio_set_interrupt(PIN_INT_G  , GPIO_INTTYPE_EDGE_POS, int_signal_handler);
         gpio_set_interrupt(PIN_DRDY_G , GPIO_INTTYPE_EDGE_POS, int_signal_handler);
 
-        #endif  // !defined(INT_USED)
+        #endif  // INT_USED
         
-        // -- SENSOR CONFIGURATION PART ---
+        /** -- SENSOR CONFIGURATION PART --- */
 
-        // Interrupt configuration has to be done before the sensor is set
-        // into measurement mode
-        
         // set the type of INTx signals if necessary
         lsm9ds0_config_int_am_signals (sensor_am, lsm9ds0_int_push_pull);
         lsm9ds0_config_int_g_signals  (sensor_g, lsm9ds0_int_g_high_active, lsm9ds0_int_push_pull);
@@ -528,7 +518,24 @@ void user_init(void)
         lsm9ds0_set_m_mode (sensor_am, lsm9ds0_m_odr_12_5, lsm9ds0_m_low_res, lsm9ds0_m_continuous);
         lsm9ds0_set_g_mode (sensor_g , lsm9ds0_g_odr_95, 3, true, true, true);
 
-        // -- SENSOR CONFIGURATION PART ---
+        /** -- TASK CREATION PART --- */
+
+        // must be done last to avoid concurrency situations with the sensor
+        // configuration part
+
+        #ifdef INT_USED
+
+        // create a task that is triggered only in case of interrupts to fetch the data
+        xTaskCreate(user_task_interrupt, "user_task_interrupt", TASK_STACK_DEPTH, NULL, 2, NULL);
+        
+        #else // INT_USED
+
+        // create a user task that fetches data from sensor periodically
+        xTaskCreate(user_task_periodic, "user_task_periodic", TASK_STACK_DEPTH, NULL, 2, NULL);
+
+        #endif
     }
+    else
+        printf("Could not initialize LSM9DS0 sensor\n");
 }
 
