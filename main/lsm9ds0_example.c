@@ -51,7 +51,13 @@
 // #define INT_M_THRESH // magnetic value exceeds threshold interrupt used
 // #define INT_G_EVENT  // angular rate event interrupts used
 
-#if defined(INT_DATA) || defined(INT_A_EVENT) || defined(INT_G_EVENT) || defined(INT_A_CLICK) || defined(INT_M_THRESH)
+#if defined(INT_DATA)
+#define INT_USED
+#endif
+#if defined(INT_A_EVENT) || defined(INT_G_EVENT) || defined(INT_A_CLICK)
+#define INT_USED
+#endif
+#if defined(INT_M_THRESH)
 #define INT_USED
 #endif
 
