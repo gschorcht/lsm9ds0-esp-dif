@@ -39,8 +39,8 @@ Symbol  | Related to | Mapped to
 ```lsm9ds0_int_am_signal1``` | LSM303D sensor interrupt signal INT1 | ```lsm303d_int1_signal```
 ```lsm9ds0_set_a_mode```     | LSM303D accelerator mode | ```lsm303d_set_a_mode```
 ```lsm9ds0_set_m_mode```     | LSM303D magnetometer mode | ```lsm303d_set_m_mode```
-```lsm9ds0_set_g_mode```     | L3GD20 gyroscope mode | ```lsm303d_set_g_mode```
-```lsm9ds0_get_int_am_data_source``` | any LSM303D data source | ```lsm303d_get_int_data_source```
+```lsm9ds0_set_g_mode```     | L3GD20 gyroscope mode | ```l3gd20h_set_mode```
+```lsm9ds0_get_int_am_data_source``` | LSM303D data source | ```lsm303d_get_int_data_source```
 ```lsm9ds0_get_int_g_data_source``` | L3GD20 gyroscope data source | ```l3gd20h_get_int_data_source```
 ```lsm9ds0_get_float_a_data```     | LSM303D accelerator data | ```lsm303d_get_float_a_data```
 ```lsm9ds0_get_float_m_data```     | LSM303D magnetometer data | ```lsm303d_get_float_m_data```
